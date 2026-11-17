@@ -1,19 +1,14 @@
-# Runtime Service
+# Python Runtime Utilities
 
-Runtime state is saved every 180 seconds and again during normal shutdown or
-cancellation. SQLite databases and sessions use the online backup API, including
-committed WAL pages. Snapshots are validated before atomically replacing the
-backup file; a failed snapshot keeps the last good remote version.
+Utilities for starting independent Python services and persisting runtime state.
+Dependency locations are supplied through private runtime configuration. The
+public workflow contains no source repository mapping.
 
-State commits are made from a separate checkout under `RUNNER_TEMP`, guarded by
-a process lock. They include only the configured state files and are rebuilt on
-the latest remote head when concurrent updates reject a push. The bot checkout
-is never reset, rebased, or used to commit snapshots.
+SQLite state is copied through validated online backups into a separate checkout.
+Saves use a process lock and preserve concurrent updates on the remote branch.
+Persistence is periodic; abrupt runner loss can lose changes since the last save.
 
-Run `python -m unittest discover -s tests -v` to test concurrent SQLite writes,
-WAL recovery, corrupt files, save locking, and concurrent Git pushes. The same
-checks run in CI and before the runtime starts.
+Run `python -m unittest discover -s tests -v` to validate state persistence and
+dependency configuration. The workflow also runs these checks before startup.
 
-This remains periodic persistence: a sudden runner loss can lose changes since
-the last successful push. It is not a guarantee of zero data loss. Cancellation
-cleanup is best effort; backup failures are surfaced in Actions annotations.
+Renaming a repository does not erase its existing history or old redirects.
