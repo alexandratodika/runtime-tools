@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'runtime_state.py'
+      - 'checkout_sources.py'
       - 'tests/**'
       - '.github/workflows/**'
 

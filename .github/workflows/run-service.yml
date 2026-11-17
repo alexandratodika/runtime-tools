@@ -36,24 +36,24 @@ jobs:
       - name: Start Runtime Service
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          RUNTIME_SOURCES: ${{ secrets.RUNTIME_SOURCES }}
           PYTHONUTF8: "1"
           QUIET_STARTUP: "1"
         run: |
-          git config --global user.name "ShopBot AutoSave"
-          git config --global user.email "bot@users.noreply.github.com"
+          git config --global user.name "Runtime Sync"
+          git config --global user.email "runtime@users.noreply.github.com"
+          python "$GITHUB_WORKSPACE/checkout_sources.py" worker_a worker_b
 
-          git clone https://x-access-token:${PAT_TOKEN}@github.com/alexandratodika/kho9-tele-shop-bot.git bot9
-          git clone https://x-access-token:${PAT_TOKEN}@github.com/alexandratodika/unghosinhvien-tele-bot.git bot10
 
           pip install --upgrade pip
-          pip install -r bot9/requirements.txt -r bot10/requirements.txt
+          pip install -r worker_a/requirements.txt -r worker_b/requirements.txt
 
-          cp -a "bot9" "$RUNNER_TEMP/bot9_state_sync"
-          cp -a "bot10" "$RUNNER_TEMP/bot10_state_sync"
+          cp -a "worker_a" "$RUNNER_TEMP/worker_a_state_sync"
+          cp -a "worker_b" "$RUNNER_TEMP/worker_b_state_sync"
 
           save_all_bot_states() {
             local failed=0
-            for d in bot9 bot10; do
+            for d in worker_a worker_b; do
               if ! python "$GITHUB_WORKSPACE/runtime_state.py" "$d" "$RUNNER_TEMP/${d}_state_sync" 'shop_data.db' 'ungho_data.db' 'skyworld_cache.json' 'domdalton_cache.json'; then
                 failed=1
               fi
@@ -73,15 +73,15 @@ jobs:
 
           (
             while true; do
-              for d in bot9 bot10; do
+              for d in worker_a worker_b; do
                 (
                   cd "$d"
                   git fetch origin main 2>/dev/null || true
                   git checkout origin/main -- hub_tunnel.json 2>/dev/null || true
                 )
               done
-              if ! grep -qE '^BOT_TOKEN=.+$' bot10/.env 2>/dev/null; then
-                (cd bot10 && git checkout origin/main -- .env 2>/dev/null || true)
+              if ! grep -qE '^BOT_TOKEN=.+$' worker_b/.env 2>/dev/null; then
+                (cd worker_b && git checkout origin/main -- .env 2>/dev/null || true)
               fi
               sleep 45
             done
@@ -92,7 +92,7 @@ jobs:
 
           sleep 2
 
-          for d in bot9 bot10; do
+          for d in worker_a worker_b; do
             (
               cd "$d"
               START_TIME=$SECONDS
@@ -114,10 +114,10 @@ jobs:
             echo "::warning::End-of-run state save failed; finalizer will retry."
           fi
 
-          curl -s -X POST \
+          curl --fail --silent --show-error --location --max-time 30 -X POST \
             -H "Authorization: token ${PAT_TOKEN}" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/alexandratodika/tele-shop-cloud-runner/actions/workflows/run-24-7.yml/dispatches \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/run-service.yml/dispatches" \
             -d '{"ref":"main"}' || true
 
       - name: Save validated state on exit or cancel
@@ -126,7 +126,7 @@ jobs:
           pkill -INT -f "python -X utf8" 2>/dev/null || true
           sleep 3
           failed=0
-          for d in bot9 bot10; do
+          for d in worker_a worker_b; do
             if [ -d "$d/.git" ]; then
               if [ ! -d "$RUNNER_TEMP/${d}_state_sync/.git" ]; then
                 echo "::error::Independent state checkout is missing."
